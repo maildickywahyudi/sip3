@@ -83,7 +83,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
       const currentRoleObj = rolesInfo.find(r => r.id === selectedRole);
       const finalName = user.user_metadata?.display_name || currentRoleObj?.defaultName || user.email || 'Pengurus RT';
       setSuccessMessage(`Login berhasil sebagai ${finalName}`);
-      onLogin({ role: selectedRole, nama: finalName, username: user.email, email: user.email, isAuthenticated: true, isLoggedIn: true });
+      onLogin({ id: user.id, role: selectedRole, nama: finalName, username: user.email, email: user.email, isAuthenticated: true, isLoggedIn: true });
       if (onClose) onClose();
     } catch (error: any) {
       setErrorMessage(error.message || 'Email atau password tidak valid.');
@@ -249,7 +249,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Masukkan PIN / Password (Default: 1234)"
+                  placeholder="Masukkan password akun Supabase"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-9 pr-10 py-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono transition"

@@ -169,6 +169,7 @@ export interface PengurusAccount {
 }
 
 export interface CurrentUser {
+  id?: string;
   role: UserRole;
   nama: string;
   username?: string;

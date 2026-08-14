@@ -1,9 +1,19 @@
 @import "tailwindcss";
 
 @layer base {
-  body {
+  :root {
+    color-scheme: light;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #f6f8fb;
+    color: #0f172a;
+  }
+
+  button, input, textarea, select { font: inherit; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid rgb(16 185 129 / 0.24); outline-offset: 2px; }
 }
 
 @media print {

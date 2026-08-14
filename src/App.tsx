@@ -27,6 +27,8 @@ import { SearchModal } from './components/SearchModal';
 import { NotificationModal } from './components/NotificationModal';
 import { AuthModal } from './components/AuthModal';
 import { LoginPortal } from './components/LoginPortal';
+import { AccountSettingsView } from './components/AccountSettingsView';
+import { supabaseService } from './services/supabaseService';
 
 export default function App() {
   // Navigation State
@@ -74,6 +76,17 @@ export default function App() {
   useEffect(() => {
     // Initial load
     refreshAllData();
+    const unsubscribeAuth = supabaseService.onAuthStateChange((user) => {
+      if (user) {
+        const role = user.user_metadata?.role === 'ADMIN_SEKRETARIS' ? 'ADMIN_SEKRETARIS' : 'ADMIN_KETUA_RT';
+        const sessionUser: CurrentUser = { id: user.id, role, nama: user.user_metadata?.display_name || user.email || 'Pengurus RT', username: user.email, email: user.email, isAuthenticated: true, isLoggedIn: true };
+        storageService.setCurrentUser(sessionUser);
+        setCurrentUser(sessionUser);
+      } else {
+        storageService.logout();
+        setCurrentUser(storageService.getCurrentUser());
+      }
+    });
 
     // Subscribe to storage changes
     const unsubscribe = storageService.subscribe(() => {
@@ -91,6 +104,7 @@ export default function App() {
 
     return () => {
       unsubscribe();
+      unsubscribeAuth();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, []);
@@ -249,7 +263,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen bg-[#f6f8fb] text-slate-900 flex font-sans selection:bg-emerald-100 selection:text-emerald-900">
       {/* Toast Alert Banner */}
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 animate-in fade-in slide-in-from-top-4 duration-200">
@@ -305,7 +319,7 @@ export default function App() {
         />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 no-print">
+      <main className="flex-1 max-w-[1440px] w-full mx-auto p-4 sm:p-6 lg:p-9 no-print">
         {activeTab === 'dashboard' && (
           <DashboardView
             wargaList={wargaList}
@@ -391,6 +405,18 @@ export default function App() {
         {activeTab === 'audit' && (
           <AuditLogView
             currentUser={currentUser}
+          />
+        )}
+
+        {activeTab === 'akun' && (
+          <AccountSettingsView
+            currentUser={currentUser}
+            onSaved={(name, roleLabel) => {
+              const updated = { ...currentUser, nama: name };
+              storageService.setCurrentUser(updated);
+              setCurrentUser(updated);
+            }}
+            onToast={(message, type) => showToast(message, type === 'error' ? 'error' : 'success')}
           />
         )}
 

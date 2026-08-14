@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Database,
   X,
-  ShieldAlert
+  ShieldAlert,
+  Settings
 } from 'lucide-react';
 import { RTConfig, CurrentUser, Notifikasi } from '../types';
 import { BekasiLogo } from './BekasiLogo';
@@ -44,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   // Collapsible menu groups state
   const isDataWargaActive = ['warga', 'kk', 'surat', 'mutasi', 'bansos'].includes(activeTab);
-  const isSettingActive = ['templates', 'audit', 'kop', 'integrasi', 'portal'].includes(activeTab);
+  const isSettingActive = ['templates', 'audit', 'kop', 'integrasi', 'portal', 'akun'].includes(activeTab);
 
   const [isDataWargaOpen, setIsDataWargaOpen] = useState<boolean>(true);
   const [isSettingOpen, setIsSettingOpen] = useState<boolean>(true);
@@ -254,6 +255,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             {isSettingOpen && (
               <div className="space-y-0.5 pl-1 pt-0.5">
+                <button
+                  onClick={() => handleNavClick('akun')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition text-left cursor-pointer ${
+                    activeTab === 'akun' ? 'bg-emerald-50 text-emerald-700 font-bold border-l-3 border-emerald-600 shadow-2xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Settings className={`w-4 h-4 shrink-0 ${activeTab === 'akun' ? 'text-emerald-600' : 'text-slate-500'}`} />
+                  <span className="truncate">Profil & Keamanan</span>
+                </button>
+
                 <button
                   onClick={() => handleNavClick('templates')}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition text-left cursor-pointer ${
