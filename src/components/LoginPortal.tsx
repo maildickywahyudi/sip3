@@ -241,7 +241,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 <label className="block text-xs font-bold text-slate-700">
                   Password / PIN Keamanan Admin:
                 </label>
-                <span className="text-[10px] text-slate-400">Gunakan password akun Supabase</span>
+                <span className="text-[10px] text-slate-400">Password akun SIP3</span>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -274,7 +274,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 />
                 <span>Ingat sesi di perangkat ini</span>
               </label>
-              <span className="text-slate-400 text-[11px]">Akses terenkripsi Supabase Auth</span>
+              <span className="text-slate-400 text-[11px]">Akun internal SIP3 terenkripsi</span>
             </div>
 
             {errorMessage && (

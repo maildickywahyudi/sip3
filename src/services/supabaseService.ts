@@ -112,29 +112,20 @@ class SupabaseService {
     await this.internalAuth('update-password', { password });
   }
 
-  private getOwnerId() {
-    return this.client ? undefined : undefined;
+  private async loadTable(table: string) {
+    const body = await this.internalAuth('data', { table, mode: 'load' });
+    return (body.data || []).map((row: any) => this.fromSnakeCase(row));
   }
 
   public async loadCloudData() {
-    const client = this.getClient();
-    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
-    const { data: userData, error: userError } = await client.auth.getUser();
-    if (userError || !userData.user) throw new Error('Sesi login Supabase tidak ditemukan.');
-    const ownerId = userData.user.id;
-    const [warga, kk, surat, mutasi] = await Promise.all([
-      client.from('warga_rt004').select('*').eq('owner_id', ownerId).order('nama'),
-      client.from('kartu_keluarga_rt004').select('*').eq('owner_id', ownerId).order('nomor_kk'),
-      client.from('surat_pengantar_rt004').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false }),
-      client.from('mutasi_penduduk_rt004').select('*').eq('owner_id', ownerId).order('created_at', { ascending: false })
+    const [wargaRows, kkRows, suratRows, mutasiRows] = await Promise.all([
+      this.loadTable('warga_rt004'), this.loadTable('kartu_keluarga_rt004'), this.loadTable('surat_pengantar_rt004'), this.loadTable('mutasi_penduduk_rt004')
     ]);
-    const failure = [warga, kk, surat, mutasi].find(result => result.error);
-    if (failure?.error) throw failure.error;
     return {
-      warga: (warga.data || []).map((row: any) => ({ id: row.id, nik: row.nik, nomorKK: row.nomor_kk, nama: row.nama, jenisKelamin: row.jenis_kelamin, tempatLahir: row.tempat_lahir, tanggalLahir: row.tanggal_lahir, agama: row.agama, pendidikan: row.pendidikan, pekerjaan: row.pekerjaan, statusPerkawinan: row.status_perkawinan, statusHubunganKK: row.status_hubungan_kk, kewarganegaraan: row.kewarganegaraan, golonganDarah: row.golongan_darah, nomorHp: row.nomor_hp, email: row.email, statusTinggal: row.status_tinggal, isLansia: row.is_lansia, isBalita: row.is_balita, isYatim: row.is_yatim, isDisabilitas: row.is_disabilitas, statusBansos: row.status_bansos, keteranganBansos: row.keterangan_bansos, tanggalInput: row.tanggal_input, catatan: row.catatan })),
-      kk: (kk.data || []).map((row: any) => ({ id: row.id, nomorKK: row.nomor_kk, kepalaKeluargaNama: row.kepala_keluarga_nama, kepalaKeluargaNik: row.kepala_keluarga_nik, alamat: row.alamat, rt: row.rt, rw: row.rw, kelurahan: row.kelurahan, kecamatan: row.kecamatan, kabupatenKota: row.kabupaten_kota, provinsi: row.provinsi, kodePos: row.kode_pos, statusDomisili: row.status_domisili, blokRumah: row.blok_rumah, tanggalTerbit: row.tanggal_terbit, tanggalUpdate: row.tanggal_update, catatan: row.catatan, anggota: [] })),
-      surat: (surat.data || []).map((row: any) => this.fromSnakeCase(row)),
-      mutasi: (mutasi.data || []).map((row: any) => this.fromSnakeCase(row))
+      warga: wargaRows,
+      kk: kkRows.map((row: any) => ({ ...row, anggota: row.anggota || [] })),
+      surat: suratRows,
+      mutasi: mutasiRows
     };
   }
 
@@ -151,20 +142,12 @@ class SupabaseService {
   }
 
   public async upsertCloud(table: string, value: any) {
-    const client = this.getClient();
-    const user = await client?.auth.getUser();
-    if (!client || !user?.data.user) throw new Error('Sesi login Supabase tidak ditemukan.');
-    const payload = { ...this.toSnakeCase(value), owner_id: user.data.user.id };
-    const { data, error } = await client.from(table).upsert(payload).select().single();
-    if (error) throw error;
-    return data;
+    const body = await this.internalAuth('data', { table, mode: 'upsert', value: this.toSnakeCase(value) });
+    return body.data;
   }
 
   public async deleteCloud(table: string, id: string) {
-    const client = this.getClient();
-    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
-    const { error } = await client.from(table).delete().eq('id', id);
-    if (error) throw error;
+    await this.internalAuth('data', { table, mode: 'delete', id });
   }
   private defaultProjectUrl = 'https://nginmiqjfzycvbbufbev.supabase.co';
 
