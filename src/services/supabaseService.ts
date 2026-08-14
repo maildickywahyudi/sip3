@@ -68,6 +68,52 @@ export function parseSupabaseInput(input: string): ParsedSupabaseConnection {
 
 class SupabaseService {
   private client: SupabaseClient | null = null;
+
+  public async signIn(email: string, password: string) {
+    const client = this.getClient();
+    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
+    const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        throw new Error('Email belum terverifikasi. Silakan cek inbox Anda.');
+      }
+      if (error.status === 429) throw new Error('Terlalu banyak percobaan. Coba lagi beberapa saat.');
+      throw new Error('Email atau password tidak valid.');
+    }
+    return data.user;
+  }
+
+  public async getSessionUser() {
+    const client = this.getClient();
+    if (!client) return null;
+    const { data } = await client.auth.getUser();
+    return data.user ?? null;
+  }
+
+  public async signOut() {
+    await this.getClient()?.auth.signOut();
+  }
+
+  public onAuthStateChange(callback: (user: any) => void) {
+    const client = this.getClient();
+    if (!client) return () => {};
+    const { data } = client.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
+    return () => data.subscription.unsubscribe();
+  }
+
+  public async updateProfile(userId: string, displayName: string, roleLabel: string) {
+    const client = this.getClient();
+    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
+    const { error } = await client.from('profiles').upsert({ id: userId, display_name: displayName.trim(), role_label: roleLabel.trim(), updated_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+
+  public async updatePassword(password: string) {
+    const client = this.getClient();
+    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
+    const { error } = await client.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+  }
   private defaultProjectUrl = 'https://nginmiqjfzycvbbufbev.supabase.co';
 
   public parseInput(input: string): ParsedSupabaseConnection {
@@ -76,8 +122,9 @@ class SupabaseService {
 
   public getSupabaseConfig(): { url: string; anonKey: string; projectRef?: string } {
     const config = storageService.getConfig();
-    const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-    const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+    const env = (import.meta as any).env || {};
+    const envUrl = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const envKey = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || '';
     const rawUrl = config.supabaseUrl || envUrl || this.defaultProjectUrl;
     const parsed = parseSupabaseInput(rawUrl);
 

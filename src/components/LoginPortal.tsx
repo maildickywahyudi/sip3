@@ -10,11 +10,11 @@ import {
   Eye,
   EyeOff,
   User,
-  Sparkles,
   BadgeCheck
 } from 'lucide-react';
 import { CurrentUser, UserRole, RTConfig } from '../types';
 import { BekasiLogo } from './BekasiLogo';
+import { supabaseService } from '../services/supabaseService';
 
 interface LoginPortalProps {
   currentUser: CurrentUser;
@@ -68,51 +68,28 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
     }
   ];
 
-  const handleQuickLogin = (role: UserRole, customName: string) => {
-    setErrorMessage('');
-    setIsLoading(true);
-    setSuccessMessage(`Mengautentikasi ${customName}...`);
-    
-    setTimeout(() => {
-      onLogin({
-        role,
-        nama: customName,
-        isAuthenticated: true,
-        isLoggedIn: true
-      });
-      setIsLoading(false);
-      if (onClose) onClose();
-    }, 400);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
-    setIsLoading(true);
-
-    const validPasswords = ['1234', 'rt004', 'sekretaris', 'admin123', 'jatimulya', '0047', '2026'];
-    
-    // Check password if entered
-    if (password && !validPasswords.includes(password.trim().toLowerCase())) {
-      setErrorMessage('Password / PIN Admin salah. (Gunakan PIN default: 1234 atau klik tombol Masuk Cepat)');
-      setIsLoading(false);
+    setSuccessMessage('');
+    if (!username.trim() || !password) {
+      setErrorMessage('Masukkan email dan password untuk melanjutkan.');
       return;
     }
-
-    const currentRoleObj = rolesInfo.find(r => r.id === selectedRole);
-    const finalName = username.trim() || (currentRoleObj ? currentRoleObj.defaultName : 'Admin RT 004');
-
-    setSuccessMessage(`Login berhasil sebagai ${finalName}`);
-    setTimeout(() => {
-      onLogin({
-        role: selectedRole,
-        nama: finalName,
-        isAuthenticated: true,
-        isLoggedIn: true
-      });
-      setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const user = await supabaseService.signIn(username, password);
+      if (!user) throw new Error('Email atau password tidak valid.');
+      const currentRoleObj = rolesInfo.find(r => r.id === selectedRole);
+      const finalName = user.user_metadata?.display_name || currentRoleObj?.defaultName || user.email || 'Pengurus RT';
+      setSuccessMessage(`Login berhasil sebagai ${finalName}`);
+      onLogin({ role: selectedRole, nama: finalName, username: user.email, email: user.email, isAuthenticated: true, isLoggedIn: true });
       if (onClose) onClose();
-    }, 400);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Email atau password tidak valid.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const activeRoleObj = rolesInfo.find(r => r.id === selectedRole) || rolesInfo[0];
@@ -239,25 +216,6 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
             })}
           </div>
 
-          {/* Quick 1-Click Access Pill */}
-          <div className="mb-5 p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-              <div className="text-[11px] text-slate-600 truncate">
-                Masuk cepat sebagai <span className="font-bold text-slate-900">{activeRoleObj.defaultName}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin(activeRoleObj.id, activeRoleObj.defaultName)}
-              disabled={isLoading}
-              className="shrink-0 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-900 hover:bg-emerald-600 text-white transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <span>Masuk 1-Klik</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
           {/* Form Login with Password */}
           <form onSubmit={handleFormSubmit} className="space-y-3.5">
             <div>
@@ -283,7 +241,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 <label className="block text-xs font-bold text-slate-700">
                   Password / PIN Keamanan Admin:
                 </label>
-                <span className="text-[10px] text-slate-400">Default PIN: <strong className="text-slate-600 font-mono">1234</strong></span>
+                <span className="text-[10px] text-slate-400">Gunakan password akun Supabase</span>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -316,13 +274,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 />
                 <span>Ingat sesi di perangkat ini</span>
               </label>
-              <button
-                type="button"
-                onClick={() => setPassword('1234')}
-                className="text-emerald-600 hover:text-emerald-700 font-semibold text-[11px] underline cursor-pointer"
-              >
-                Gunakan PIN Default 1234
-              </button>
+              <span className="text-slate-400 text-[11px]">Akses terenkripsi Supabase Auth</span>
             </div>
 
             {errorMessage && (
