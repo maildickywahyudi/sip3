@@ -62,14 +62,24 @@ export default function App() {
   };
 
   // Sync state from storage service
-  const refreshAllData = () => {
-    setWargaList(storageService.getWargaList());
-    setKkList(storageService.getKKList());
-    setSuratList(storageService.getSuratList());
-    setMutasiList(storageService.getMutasiList());
+  const refreshAllData = async () => {
     setRtConfig(storageService.getRTConfig());
     setNotifications(storageService.getNotifications());
     setCurrentUser(storageService.getCurrentUser());
+    try {
+      const cloud = await supabaseService.loadCloudData();
+      setWargaList(cloud.warga);
+      setKkList(cloud.kk);
+      setSuratList(cloud.surat);
+      setMutasiList(cloud.mutasi);
+      storageService.saveWargaList(cloud.warga);
+      storageService.saveKKList(cloud.kk);
+      storageService.saveSurat(cloud.surat);
+      storageService.saveMutasi(cloud.mutasi);
+    } catch (error) {
+      setWargaList([]); setKkList([]); setSuratList([]); setMutasiList([]);
+      showToast('Data cloud belum dapat dimuat. Silakan login dan periksa koneksi Supabase.', 'info');
+    }
   };
 
   useEffect(() => {
@@ -109,54 +119,43 @@ export default function App() {
   }, []);
 
   // Warga Handlers
-  const handleSaveWarga = (warga: Warga) => {
-    storageService.saveWarga(warga);
-    showToast(`Data warga ${warga.nama} berhasil disimpan!`);
+  const handleSaveWarga = async (warga: Warga) => {
+    try { await supabaseService.upsertCloud('warga_rt004', warga); await refreshAllData(); showToast(`Data warga ${warga.nama} berhasil disimpan!`); } catch { showToast('Data warga gagal disimpan ke Supabase.', 'error'); }
   };
 
-  const handleDeleteWarga = (id: string) => {
-    storageService.deleteWarga(id);
-    showToast('Data warga berhasil dihapus.', 'info');
+  const handleDeleteWarga = async (id: string) => {
+    try { await supabaseService.deleteCloud('warga_rt004', id); await refreshAllData(); showToast('Data warga berhasil dihapus.', 'info'); } catch { showToast('Data warga gagal dihapus.', 'error'); }
   };
 
   // KK Handlers
-  const handleSaveKK = (kk: KartuKeluarga) => {
-    storageService.saveKK(kk);
-    showToast(`Kartu Keluarga ${kk.nomorKK} berhasil disimpan!`);
+  const handleSaveKK = async (kk: KartuKeluarga) => {
+    try { await supabaseService.upsertCloud('kartu_keluarga_rt004', kk); await refreshAllData(); showToast(`Kartu Keluarga ${kk.nomorKK} berhasil disimpan!`); } catch { showToast('Kartu Keluarga gagal disimpan ke Supabase.', 'error'); }
   };
 
-  const handleDeleteKK = (id: string) => {
-    storageService.deleteKK(id);
-    showToast('Data Kartu Keluarga berhasil dihapus.', 'info');
+  const handleDeleteKK = async (id: string) => {
+    try { await supabaseService.deleteCloud('kartu_keluarga_rt004', id); await refreshAllData(); showToast('Data Kartu Keluarga berhasil dihapus.', 'info'); } catch { showToast('Data Kartu Keluarga gagal dihapus.', 'error'); }
   };
 
   // Surat Pengantar Handlers
-  const handleAddSurat = (suratData: any) => {
-    const created = storageService.addSurat(suratData);
-    showToast(`Surat pengantar ${created.nomorSurat} berhasil dibuat!`);
-    setSelectedSuratId(created.id);
-    setActiveTab('surat');
+  const handleAddSurat = async (suratData: any) => {
+    try { const created = { ...suratData, id: suratData.id || `surat-${Date.now()}` }; await supabaseService.upsertCloud('surat_pengantar_rt004', created); await refreshAllData(); showToast(`Surat pengantar ${created.nomorSurat} berhasil dibuat!`); setSelectedSuratId(created.id); setActiveTab('surat'); } catch { showToast('Surat gagal disimpan ke Supabase.', 'error'); }
   };
 
-  const handleUpdateSuratStatus = (id: string, status: 'DISETUJUI' | 'DITOLAK', alasan?: string) => {
-    storageService.updateSuratStatus(id, status, alasan);
-    showToast(status === 'DISETUJUI' ? 'Surat pengantar telah disetujui & siap dicetak!' : 'Surat permohonan telah ditolak.');
+  const handleUpdateSuratStatus = async (id: string, status: 'DISETUJUI' | 'DITOLAK', alasan?: string) => {
+    try { await supabaseService.upsertCloud('surat_pengantar_rt004', { id, status, alasanPenolakan: alasan, tanggalDisetujui: status === 'DISETUJUI' ? new Date().toISOString().slice(0, 10) : null }); await refreshAllData(); showToast(status === 'DISETUJUI' ? 'Surat pengantar telah disetujui & siap dicetak!' : 'Surat permohonan telah ditolak.'); } catch { showToast('Status surat gagal diperbarui.', 'error'); }
   };
 
-  const handleDeleteSurat = (id: string) => {
-    storageService.deleteSurat(id);
-    showToast('Arsip surat berhasil dihapus.', 'info');
+  const handleDeleteSurat = async (id: string) => {
+    try { await supabaseService.deleteCloud('surat_pengantar_rt004', id); await refreshAllData(); showToast('Arsip surat berhasil dihapus.', 'info'); } catch { showToast('Arsip surat gagal dihapus.', 'error'); }
   };
 
   // Mutasi Handlers
-  const handleAddMutasi = (mutasi: MutasiPenduduk) => {
-    storageService.addMutasi(mutasi);
-    showToast(`Mutasi penduduk ${mutasi.namaWarga} berhasil dicatat.`);
+  const handleAddMutasi = async (mutasi: MutasiPenduduk) => {
+    try { await supabaseService.upsertCloud('mutasi_penduduk_rt004', { ...mutasi, id: mutasi.id || `mutasi-${Date.now()}` }); await refreshAllData(); showToast(`Mutasi penduduk ${mutasi.namaWarga} berhasil dicatat.`); } catch { showToast('Mutasi gagal disimpan ke Supabase.', 'error'); }
   };
 
-  const handleDeleteMutasi = (id: string) => {
-    storageService.deleteMutasi(id);
-    showToast('Catatan mutasi dihapus.', 'info');
+  const handleDeleteMutasi = async (id: string) => {
+    try { await supabaseService.deleteCloud('mutasi_penduduk_rt004', id); await refreshAllData(); showToast('Catatan mutasi dihapus.', 'info'); } catch { showToast('Catatan mutasi gagal dihapus.', 'error'); }
   };
 
   // Bansos update

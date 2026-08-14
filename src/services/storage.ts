@@ -204,21 +204,10 @@ class StorageService {
     if (!localStorage.getItem(STORAGE_KEYS.CONFIG)) {
       this.saveConfig(initialRTConfig);
     }
-    if (!localStorage.getItem(STORAGE_KEYS.WARGA)) {
-      this.saveWargaList(initialWargaList);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.KK)) {
-      this.saveKKList(initialKartuKeluargaList);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.SURAT)) {
-      this.saveSurat(initialSuratPengantarList);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.MUTASI)) {
-      this.saveMutasi(initialMutasiList);
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.NOTIF)) {
-      this.saveNotifikasi(initialNotifikasiList);
-    }
+    // Data domain tidak lagi di-seed ke localStorage. Supabase adalah source of truth.
+    [STORAGE_KEYS.WARGA, STORAGE_KEYS.KK, STORAGE_KEYS.SURAT, STORAGE_KEYS.MUTASI, STORAGE_KEYS.NOTIF].forEach(key => {
+      if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify([]));
+    });
     if (!localStorage.getItem(STORAGE_KEYS.TEMPLATES)) {
       this.saveTemplates(initialTemplates);
     }
@@ -330,7 +319,7 @@ class StorageService {
   // --- WARGA ---
   public getWargaList(): Warga[] {
     const data = localStorage.getItem(STORAGE_KEYS.WARGA);
-    if (!data) return initialWargaList;
+    if (!data) return [];
     try {
       const list: Warga[] = JSON.parse(data);
       // Ensure age flags are calculated dynamically
@@ -343,7 +332,7 @@ class StorageService {
         };
       });
     } catch {
-      return initialWargaList;
+      return [];
     }
   }
 
@@ -401,7 +390,7 @@ class StorageService {
   // --- KARTU KELUARGA (KK) ---
   public getKKList(): KartuKeluarga[] {
     const data = localStorage.getItem(STORAGE_KEYS.KK);
-    if (!data) return initialKartuKeluargaList;
+    if (!data) return [];
     try {
       const kkList: KartuKeluarga[] = JSON.parse(data);
       const wargaList = this.getWargaList();
@@ -411,7 +400,7 @@ class StorageService {
         anggota: wargaList.filter(w => w.nomorKK === kk.nomorKK)
       }));
     } catch {
-      return initialKartuKeluargaList;
+      return [];
     }
   }
 
