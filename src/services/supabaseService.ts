@@ -69,50 +69,47 @@ export function parseSupabaseInput(input: string): ParsedSupabaseConnection {
 class SupabaseService {
   private client: SupabaseClient | null = null;
 
-  public async signIn(email: string, password: string) {
-    const client = this.getClient();
-    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
-    const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) {
-      if (error.message.toLowerCase().includes('email not confirmed')) {
-        throw new Error('Email belum terverifikasi. Silakan cek inbox Anda.');
-      }
-      if (error.status === 429) throw new Error('Terlalu banyak percobaan. Coba lagi beberapa saat.');
-      throw new Error('Email atau password tidak valid.');
-    }
-    return data.user;
+  private getInternalAuthUrl() {
+    const { url } = this.getSupabaseConfig();
+    return `${url.replace(/\/$/, '')}/functions/v1/sip3-account-auth`;
+  }
+
+  private async internalAuth(action: string, payload: Record<string, unknown> = {}) {
+    const { anonKey } = this.getSupabaseConfig();
+    const response = await fetch(this.getInternalAuthUrl(), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', apikey: anonKey }, body: JSON.stringify({ action, ...payload }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || 'Autentikasi gagal.');
+    return body;
+  }
+
+  public async signIn(username: string, password: string) {
+    const { account } = await this.internalAuth('login', { username, password });
+    return { id: account.id, email: account.username, user_metadata: { display_name: account.displayName, role: account.roleCode }, ...account };
+  }
+
+  public async registerAccount(username: string, password: string, displayName: string) {
+    return this.internalAuth('register', { username, password, displayName });
   }
 
   public async getSessionUser() {
-    const client = this.getClient();
-    if (!client) return null;
-    const { data } = await client.auth.getUser();
-    return data.user ?? null;
+    try { const { account } = await this.internalAuth('me'); return { id: account.id, email: account.username, user_metadata: { display_name: account.displayName, role: account.roleCode }, ...account }; } catch { return null; }
   }
 
   public async signOut() {
-    await this.getClient()?.auth.signOut();
+    await this.internalAuth('logout').catch(() => undefined);
   }
 
   public onAuthStateChange(callback: (user: any) => void) {
-    const client = this.getClient();
-    if (!client) return () => {};
-    const { data } = client.auth.onAuthStateChange((_event, session) => callback(session?.user ?? null));
-    return () => data.subscription.unsubscribe();
+    this.getSessionUser().then(callback);
+    return () => {};
   }
 
-  public async updateProfile(userId: string, displayName: string, roleLabel: string) {
-    const client = this.getClient();
-    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
-    const { error } = await client.from('profiles').upsert({ id: userId, display_name: displayName.trim(), role_label: roleLabel.trim(), updated_at: new Date().toISOString() });
-    if (error) throw error;
+  public async updateProfile(_userId: string, displayName: string, roleLabel: string) {
+    await this.internalAuth('update-profile', { displayName, roleLabel });
   }
 
   public async updatePassword(password: string) {
-    const client = this.getClient();
-    if (!client) throw new Error('Koneksi Supabase belum tersedia.');
-    const { error } = await client.auth.updateUser({ password });
-    if (error) throw new Error(error.message);
+    await this.internalAuth('update-password', { password });
   }
 
   private getOwnerId() {

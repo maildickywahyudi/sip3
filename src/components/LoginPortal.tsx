@@ -73,7 +73,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
     setErrorMessage('');
     setSuccessMessage('');
     if (!username.trim() || !password) {
-      setErrorMessage('Masukkan email dan password untuk melanjutkan.');
+      setErrorMessage('Masukkan username dan password untuk melanjutkan.');
       return;
     }
     setIsLoading(true);
@@ -249,7 +249,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Masukkan password akun Supabase"
+                  placeholder="Masukkan password akun SIP3"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-9 pr-10 py-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono transition"
