@@ -1,6 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { storageService } from './storage';
-import { Warga, KartuKeluarga } from '../types';
+import {
+  Warga,
+  KartuKeluarga,
+  SuratPengantar,
+  MutasiPenduduk,
+  JenisSurat,
+  JenisMutasi
+} from '../types';
 
 export interface SupabaseSyncResult {
   success: boolean;
@@ -8,6 +15,15 @@ export interface SupabaseSyncResult {
   syncedTables?: string[];
   timestamp?: string;
   error?: string;
+}
+
+export interface SupabaseImportResult extends SupabaseSyncResult {
+  counts?: {
+    warga: number;
+    kk: number;
+    surat: number;
+    mutasi: number;
+  };
 }
 
 export interface ParsedSupabaseConnection {
@@ -76,8 +92,9 @@ class SupabaseService {
 
   public getSupabaseConfig(): { url: string; anonKey: string; projectRef?: string } {
     const config = storageService.getConfig();
-    const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-    const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+    const env = (import.meta as any).env || {};
+    const envUrl = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const envKey = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
     const rawUrl = config.supabaseUrl || envUrl || this.defaultProjectUrl;
     const parsed = parseSupabaseInput(rawUrl);
 
@@ -444,6 +461,153 @@ CREATE POLICY "Public full access for RT004" ON mutasi_penduduk_rt004 FOR ALL US
         success: false,
         message: `Gagal sinkronisasi ke Supabase: ${err.message || 'Pastikan tabel telah dibuat menggunakan SQL Schema'}`,
         error: err.message
+      };
+    }
+  }
+
+  private async fetchAllRows(table: string): Promise<any[]> {
+    const client = this.getClient();
+    if (!client) throw new Error('Konfigurasi Supabase belum lengkap. Isi URL dan Publishable/Anon Key terlebih dahulu.');
+
+    const pageSize = 500;
+    const rows: any[] = [];
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await client
+        .from(table)
+        .select('*')
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(`${table}: ${error.message}`);
+      const page = data || [];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return rows;
+  }
+
+  public async pullAllFromSupabase(): Promise<SupabaseImportResult> {
+    if (!this.getClient()) {
+      return {
+        success: false,
+        message: 'Konfigurasi Supabase belum lengkap.',
+        error: 'Isi URL dan Publishable/Anon Key proyek sumber terlebih dahulu.'
+      };
+    }
+
+    try {
+      const [wargaRows, kkRows, suratRows, mutasiRows] = await Promise.all([
+        this.fetchAllRows('warga_rt004'),
+        this.fetchAllRows('kartu_keluarga_rt004'),
+        this.fetchAllRows('surat_pengantar_rt004'),
+        this.fetchAllRows('mutasi_penduduk_rt004')
+      ]);
+
+      const dateOnly = (value: any, fallback = '') => value ? String(value).slice(0, 10) : fallback;
+      const today = new Date().toISOString().slice(0, 10);
+      const uniqueBy = <T>(items: T[], key: (item: T) => string) =>
+        Array.from(new Map(items.map(item => [key(item), item])).values());
+
+      const warga = uniqueBy(wargaRows.map((row): Warga => ({
+        id: String(row.id || `w-${row.nik}`),
+        nik: String(row.nik || '').trim(),
+        nomorKK: String(row.nomor_kk || '').trim(),
+        nama: String(row.nama || '').trim(),
+        jenisKelamin: row.jenis_kelamin === 'P' ? 'P' : 'L',
+        tempatLahir: String(row.tempat_lahir || ''),
+        tanggalLahir: dateOnly(row.tanggal_lahir),
+        agama: (row.agama || 'ISLAM') as Warga['agama'],
+        pendidikan: String(row.pendidikan || ''),
+        pekerjaan: String(row.pekerjaan || ''),
+        statusPerkawinan: (row.status_perkawinan || 'BELUM KAWIN') as Warga['statusPerkawinan'],
+        statusHubunganKK: (row.status_hubungan_kk || 'LAINNYA') as Warga['statusHubunganKK'],
+        kewarganegaraan: row.kewarganegaraan === 'WNA' ? 'WNA' : 'WNI',
+        golonganDarah: (row.golongan_darah || '-') as Warga['golonganDarah'],
+        nomorHp: String(row.nomor_hp || ''),
+        email: row.email || undefined,
+        statusTinggal: (row.status_tinggal || 'TETAP') as Warga['statusTinggal'],
+        isLansia: Boolean(row.is_lansia),
+        isBalita: Boolean(row.is_balita),
+        isYatim: Boolean(row.is_yatim),
+        isDisabilitas: Boolean(row.is_disabilitas),
+        statusBansos: (row.status_bansos || 'TIDAK_ADA') as Warga['statusBansos'],
+        keteranganBansos: row.keterangan_bansos || undefined,
+        tanggalInput: dateOnly(row.tanggal_input, today),
+        catatan: row.catatan || undefined
+      })).filter(item => item.nik || item.nama), item => item.nik || item.id);
+
+      const wargaByKK = new Map<string, Warga[]>();
+      warga.forEach(item => wargaByKK.set(item.nomorKK, [...(wargaByKK.get(item.nomorKK) || []), item]));
+
+      const kk = uniqueBy(kkRows.map((row): KartuKeluarga => ({
+        id: String(row.id || `kk-${row.nomor_kk}`),
+        nomorKK: String(row.nomor_kk || '').trim(),
+        kepalaKeluargaNama: String(row.kepala_keluarga_nama || ''),
+        kepalaKeluargaNik: String(row.kepala_keluarga_nik || ''),
+        alamat: String(row.alamat || ''),
+        rt: String(row.rt || '004'),
+        rw: String(row.rw || '007'),
+        kelurahan: String(row.kelurahan || 'Jatimulya'),
+        kecamatan: String(row.kecamatan || 'Tambun Selatan'),
+        kabupatenKota: String(row.kabupaten_kota || 'Kabupaten Bekasi'),
+        provinsi: String(row.provinsi || 'Jawa Barat'),
+        kodePos: String(row.kode_pos || '17510'),
+        statusDomisili: (row.status_domisili || 'TETAP') as KartuKeluarga['statusDomisili'],
+        blokRumah: String(row.blok_rumah || ''),
+        tanggalTerbit: dateOnly(row.tanggal_terbit, today),
+        anggota: wargaByKK.get(String(row.nomor_kk || '').trim()) || [],
+        tanggalUpdate: dateOnly(row.tanggal_update, today),
+        catatan: row.catatan || undefined
+      })).filter(item => item.nomorKK), item => item.nomorKK);
+
+      const surat = uniqueBy(suratRows.map((row): SuratPengantar => ({
+        id: String(row.id), nomorSurat: String(row.nomor_surat || ''),
+        jenisSurat: (row.jenis_surat || 'LAINNYA') as JenisSurat,
+        judulSurat: String(row.judul_surat || ''), nikPemohon: String(row.nik_pemohon || ''),
+        namaPemohon: String(row.nama_pemohon || ''), nomorKKPemohon: String(row.nomor_kk_pemohon || ''),
+        tempatTglLahirPemohon: String(row.tempat_tgl_lahir_pemohon || ''),
+        jenisKelaminPemohon: row.jenis_kelamin_pemohon === 'P' ? 'P' : 'L',
+        agamaPemohon: String(row.agama_pemohon || ''), pekerjaanPemohon: String(row.pekerjaan_pemohon || ''),
+        statusKawinPemohon: String(row.status_kawin_pemohon || ''), teleponPemohon: row.telepon_pemohon || undefined,
+        alamatPemohon: String(row.alamat_pemohon || ''), keperluan: String(row.keperluan || ''),
+        keteranganLain: row.keterangan_lain || undefined, tanggalPengajuan: dateOnly(row.tanggal_pengajuan, today),
+        tanggalDisetujui: dateOnly(row.tanggal_disetujui) || undefined,
+        status: (row.status || 'PENDING') as SuratPengantar['status'], alasanPenolakan: row.alasan_penolakan || undefined,
+        namaPejabatTtd: String(row.nama_pejabat_ttd || ''), jabatanTtd: String(row.jabatan_ttd || ''),
+        kodeVerifikasiQr: String(row.kode_verifikasi_qr || ''), catatan: row.catatan || undefined,
+        dibuatOleh: row.dibuat_oleh === 'WARGA' ? 'WARGA' : 'ADMIN'
+      })), item => item.id);
+
+      const mutasi = uniqueBy(mutasiRows.map((row): MutasiPenduduk => ({
+        id: String(row.id), tanggal: dateOnly(row.tanggal, today),
+        jenisMutasi: (row.jenis_mutasi || 'PERUBAHAN_STATUS') as JenisMutasi,
+        nik: row.nik || undefined, namaWarga: String(row.nama_warga || ''), nomorKK: String(row.nomor_kk || ''),
+        alamatAsal: String(row.alamat_asal || ''), alamatTujuan: String(row.alamat_tujuan || ''),
+        alasan: row.alasan || undefined, noSuratKeterangan: row.no_surat_keterangan || undefined,
+        petugas: row.petugas || undefined, catatan: row.catatan || undefined
+      })), item => item.id);
+
+      if (warga.length > 0) storageService.saveWargaList(warga);
+      if (kk.length > 0) storageService.saveKKList(kk);
+      if (surat.length > 0) storageService.saveSurat(surat);
+      if (mutasi.length > 0) storageService.saveMutasi(mutasi);
+
+      const now = new Date();
+      const timestamp = now.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }) + ' WIB';
+      const config = storageService.getConfig();
+      storageService.saveConfig({ ...config, terakhirSinkron: timestamp, supabaseTersambung: true });
+
+      const counts = { warga: warga.length, kk: kk.length, surat: surat.length, mutasi: mutasi.length };
+      return {
+        success: true,
+        message: `Impor selesai: ${counts.warga} warga, ${counts.kk} KK, ${counts.surat} surat, dan ${counts.mutasi} mutasi.`,
+        counts,
+        syncedTables: ['warga_rt004', 'kartu_keluarga_rt004', 'surat_pengantar_rt004', 'mutasi_penduduk_rt004'],
+        timestamp
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: 'Data belum dapat diimpor dari Supabase.',
+        error: err?.message || 'Periksa URL, Publishable/Anon Key, serta kebijakan SELECT (RLS).'
       };
     }
   }
