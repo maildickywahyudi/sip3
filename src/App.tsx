@@ -25,7 +25,6 @@ import { IntegrasiView } from './components/IntegrasiView';
 import { KopSuratSettings } from './components/KopSuratSettings';
 import { SearchModal } from './components/SearchModal';
 import { NotificationModal } from './components/NotificationModal';
-import { AuthModal } from './components/AuthModal';
 import { LoginPortal } from './components/LoginPortal';
 import { AccountSettingsView } from './components/AccountSettingsView';
 import { supabaseService } from './services/supabaseService';
@@ -224,7 +223,8 @@ export default function App() {
     setActiveTab('surat');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabaseService.signOut();
     storageService.logout();
     setCurrentUser(storageService.getCurrentUser());
     showToast('Sesi administrasi telah ditutup. Silakan login kembali.', 'info');
@@ -481,20 +481,17 @@ export default function App() {
         }}
       />
 
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        currentUser={currentUser}
-        onSwitchRole={(role, nama) => {
-          storageService.setCurrentUser({
-            role,
-            nama,
-            isAuthenticated: true,
-            isLoggedIn: true
-          });
-          showToast(`Berhasil beralih ke akun ${nama} (${role})`);
-        }}
-      />
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" role="dialog" aria-modal="true" aria-label="Informasi akun">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-wider text-emerald-600">Akun aktif</p><h2 className="mt-1 text-xl font-bold text-slate-950">{currentUser.nama}</h2><p className="mt-1 text-sm text-slate-500">Perubahan role akses hanya dapat dilakukan oleh administrator melalui Supabase.</p></div>
+              <button type="button" onClick={() => setIsAuthModalOpen(false)} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup">×</button>
+            </div>
+            <button type="button" onClick={() => { setIsAuthModalOpen(false); setActiveTab('akun'); }} className="mt-5 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white hover:bg-emerald-700">Buka Profil & Keamanan</button>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="no-print bg-white border-t border-slate-200 mt-auto py-5 text-center text-xs text-slate-500">

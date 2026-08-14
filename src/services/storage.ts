@@ -228,8 +228,9 @@ class StorageService {
     if (!localStorage.getItem(STORAGE_KEYS.USER)) {
       this.saveCurrentUser({
         role: 'ADMIN_KETUA_RT',
-        nama: 'H. Bambang Sukamto, S.E. (Ketua RT 004)',
-        isAuthenticated: true
+        nama: 'Ketua RT 004',
+        isAuthenticated: false,
+        isLoggedIn: false
       });
     }
   }
@@ -266,8 +267,11 @@ class StorageService {
       const parsed = JSON.parse(data);
       const isAuthed = parsed.isAuthenticated === true && parsed.isLoggedIn === true;
       return {
+        id: parsed.id,
         role: parsed.role || 'ADMIN_KETUA_RT',
         nama: parsed.nama || 'Ketua RT 004',
+        username: parsed.username,
+        email: parsed.email,
         isAuthenticated: isAuthed,
         isLoggedIn: isAuthed
       };
