@@ -52,6 +52,8 @@ export const IntegrasiView: React.FC<IntegrasiViewProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
   const [hasCopiedSQL, setHasCopiedSQL] = useState(false);
   const [showSQL, setShowSQL] = useState(false);
   const [sqlTab, setSqlTab] = useState<'schema' | 'data'>('data');
@@ -105,6 +107,18 @@ export const IntegrasiView: React.FC<IntegrasiViewProps> = ({
       setSyncMessage(`Gagal sinkronisasi: ${res.error}`);
     }
     setIsSyncing(false);
+  };
+
+  const handleImportFromSupabase = async () => {
+    setIsImporting(true);
+    setImportResult(null);
+    supabaseService.saveSupabaseConfig(supabaseUrl, supabaseKey);
+    const result = await supabaseService.pullAllFromSupabase();
+    setImportResult({
+      success: result.success,
+      message: result.success ? result.message : `${result.message} ${result.error || ''}`.trim()
+    });
+    setIsImporting(false);
   };
 
   const handleCopySQL = () => {
@@ -307,6 +321,16 @@ export const IntegrasiView: React.FC<IntegrasiViewProps> = ({
 
               <button
                 type="button"
+                onClick={handleImportFromSupabase}
+                disabled={isImporting || isSyncing}
+                className="px-3.5 py-2 bg-teal-600 hover:bg-teal-500 disabled:cursor-not-allowed disabled:opacity-60 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <DownloadCloud className={`w-3.5 h-3.5 ${isImporting ? 'animate-bounce' : ''}`} />
+                {isImporting ? 'Mengimpor...' : 'Impor dari Supabase'}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setShowSQL(!showSQL)}
                 className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition"
               >
@@ -327,6 +351,19 @@ export const IntegrasiView: React.FC<IntegrasiViewProps> = ({
               <div className="p-3 rounded-xl text-xs bg-emerald-50 text-emerald-900 border border-emerald-200 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{syncMessage}</span>
+              </div>
+            )}
+
+            {importResult && (
+              <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                importResult.success
+                  ? 'bg-teal-50 text-teal-950 border border-teal-200'
+                  : 'bg-rose-50 text-rose-900 border border-rose-200'
+              }`} role="status" aria-live="polite">
+                {importResult.success
+                  ? <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+                  : <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
+                <span>{importResult.message}</span>
               </div>
             )}
 
